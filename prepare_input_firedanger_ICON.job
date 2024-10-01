@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+#SBATCH --job-name=prepare_firedanger_ICON     # Specify job name
+#SBATCH --partition=compute    # Specify partition name
+#SBATCH --nodes=1
+#SBATCH --exclusive
+#SBATCH --tasks-per-node=6
+#SBATCH --mem=100G              # Specify amount of memory needed
+#SBATCH --time=08:00:00        # Set a limit on the total run time
+#SBATCH --mail-type=FAIL       # Notify user by email in case of job failure
+#SBATCH --account=bb1153       # Charge resources on this project account
+#SBATCH --output=logs/prepare_firedanger_ICON.o%j    # File name for standard output
+
+module load python3/unstable
+
+year=$1
+
+srun --cpus-per-task=30 python3 -u prepare_input_firedanger_ICON.py ${year}
+
+exit 0

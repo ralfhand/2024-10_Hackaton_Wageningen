@@ -17,27 +17,35 @@ By now, the example jobs are designed to run as one job per year. The year shoul
 Presumably, you will usually want to process several years at onse, so you may want to submit several jobs at once. 
 Therefore, e.g. use the following command to proecess all years of the ICON future projections:
 
-for year in \$\(seq 2020 2050\); do sbatch prepare_input_firedanger_ICON.job ${year}; done
+```
+for year in $(seq 2020 2050); do sbatch prepare_input_firedanger_ICON.job ${year}; done
+```
 
 It will take some minutes to preprocess all years, so feel free to take a short break.
 
 During the testing of the scripts it occassionally happened that some of the output files were corrupted. To ensure that all files are ok, you could e.g. run the following command:
 
+```
 for file in {list of your inputfiles}; do cdo info ${file} 1>/dev/null; done
+```
 
 Then rerun the SLURM job for any years that are found to be damaged.
 
 The fireweather index uses accumulative information, i.e. the current day's FWI contains information from the FWI and its subindices on the prededing days.
 To account for this, your preprocessed input data should be merged into a continuous time series after the preprocessing for all years has finished. As the You can do this using cdo:
 
+```
 module load cdo
 cdo mergetime {list of your inputfiles} {name of your outputfile}
+```
 
 After that you can use the python Notebook compute_fwi.ipynb to compute the actual fwi. The fireweather package usually needs installation, but during the Hackathon you can 
 load a pre-installed environment from Ralf's home directory:
 
+```
 conda activate /home/m/m300363/.conda/envs/firedanger_dev
 ##### put command for kernel installation here
+```
 
 If you prefer to install firedanger yourself or if you even want to modify the package during the challenge, you can download it from here:
 

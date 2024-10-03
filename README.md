@@ -17,7 +17,7 @@ By now, the example jobs are designed to run as one job per year. The year shoul
 Presumably, you will usually want to process several years at onse, so you may want to submit several jobs at once. 
 Therefore, e.g. use the following command to proecess all years of the ICON future projections:
 
-for year in $(seq 2020 2050); do sbatch prepare\_\input_firedanger_ICON.job ${year}; done
+for year in $(seq 2020 2050); do sbatch prepare_input_firedanger_ICON.job ${year}; done
 
 It will take some minutes to preprocess all years, so feel free to take a short break.
 

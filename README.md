@@ -1,7 +1,7 @@
 # 2024-10-NextGEMS-firedanger
 This repository contains some pathon scripts, Jupyter Notebooks and SLURM Job examples as a starting point for the firedanger challenge at the Next-GEMS Hackaton in Wageningen, October 2024
 
-The script contains the following files:
+The repo contains the following files:
 
 - prepare_input_firedanger_ICON.py
 - prepare_input_firedanger_IFS.py

@@ -1,52 +1,57 @@
 #!/usr/bin/env python
+# coding: utf-8
 
+# In[1]:
+
+
+#!/usr/bin/env python
+ 
 # This script preprocesses the IFS data to create input files for the firedanger tool written by Daniel Steinfeld.
-The preprocessing includes the selection of subregions, the time period, and variables and the interpolation from Healpix format to a lon-lat grid.
-Customization can be done in the customization section below.
-
+# The preprocessing includes the selection of subregions, the time period, and variables and the interpolation from Healpix format to a lon-lat grid.
+# Customization can be done in the customization section below.
 
 import sys
-
+ 
 YYYY=sys.argv[1]
 
 if __name__ == "__main__":
-
+ 
     ####################################################################################################################
     ####################################################################################################################
-
+ 
     # c u s t o m i z a t i o n   s e c t i o n 
-
+ 
     ####################################################################################################################
     ####################################################################################################################
-
-
+ 
+ 
     # in the following lines you can customize parameters according to your needs
-
+ 
     exp_id = "IFS_9-FESOM_5-production"
-
+ 
     time = "2D_hourly_0.25deg"
-
+ 
     lon_min = -125.            # region to be selected (as lon/lat, use negative values for western/southern hemisphere)
     lon_max = -115.
     lat_min = 30.
     lat_max = 40.
-
+ 
     interpol_method="cubic"    # choose one out of nearest, linear, cubic 
-
+ 
     res_out_x = .25            # resolution of the interpolated files in degree lon
     res_out_y = res_out_x      # resolution of the interpolated files in degree lat
-
+ 
     dirout="/work/bb1153/m300363/fireweather_data/California"
     filename_out= dirout + "/inputvars_IFS_9-FESOM_5-production_California_025deg_" + YYYY + ".nc"   # keep YYYY somewhere in the filename 
                                                                                          # as this script will run multiple times
                                                                                          # called by one SLURM job per year 
-
+ 
     # end of customization section (usually there should be no need to change anything below this line
-
+ 
     ######################################################################################################################
     ######################################################################################################################
-
-
+ 
+ 
     match YYYY:
        case 2020:
           time_min = YYYY + "-01-01"    # first date to be selected as YYYY-MM-DD (do not use 2020-01-01)
@@ -56,7 +61,11 @@ if __name__ == "__main__":
     time_max = YYYY + "-12-31"    # last date to be selected as YYYY-MM-DD
  
     print("writing output to ",filename_out, flush=True)
-  
+
+
+# In[2]:
+
+
 #####################
 # import libraries  #
 #####################
@@ -85,6 +94,10 @@ import cartopy.feature as cfeature
 # import logging
 from collections.abc import Iterable
 
+
+# In[11]:
+
+
 ####################
 # define functions #
 ####################
@@ -99,12 +112,11 @@ from collections.abc import Iterable
 #     return actual_decorator
 
 def attach_coords(ds):
-    lons, lats = healpy.pix2ang(
-        get_nside(ds), np.arange(ds.dims["cell"]), nest=get_nest(ds), lonlat=True
-    )
+    model_lon = ds.lon.values
+    model_lat = ds.lat.values
     return ds.assign_coords(
-        lat=(("cell",), lats, {"units": "degree_north"}),
-        lon=(("cell",), lons, {"units": "degree_east"}),
+        lat = (("value",), model_lat, {"units": "degree_north"}),
+        lon = (("value",), model_lon, {"units": "degree_east"}),
     )
 
 def compute_lhour(ds):
@@ -121,9 +133,15 @@ def compute_noonvals(ds,arrayname,varname):
     # print("select noon values for ds: " + str(ds) + ", varname: " + varname +". output will be appended to " + arrayname)
     
     lhour=compute_lhour(ds)
-    sel = np.where((lhour == 11) | (lhour == 12) | (lhour == 13),1,0)
-    var_sel = eval("ds." + varname + "* sel")
+    sel = np.where((lhour == 12),1,0)
+    # var_sel = eval("ds." + varname + "* sel")
+    var_sel = ds[varname] * sel
     arrayname[varname] = var_sel.resample(time="D").sum()
+
+    del lhour,sel,var_sel
+
+    print("noonvals for ",varname)    # without mp
+    #print("noonvals for ",varname, " computed on ", current_process(),flush=True)    # with mp
     
     return arrayname[varname]
 
@@ -155,9 +173,13 @@ def interpolate_healpy2lonlat(input_array,output_array,varname,inlon,inlat,outlo
 
     del values_interpolated
 
-    print("interpolation to lon-lat for ",varname, " computed on ", current_process(),flush=True)
+    print("interpolation to lon-lat for ",varname)    # without mp
+    # print("interpolation to lon-lat for ",varname, " computed on ", current_process(),flush=True)    # with mp
     
     return output_array[varname]
+
+
+# In[4]:
 
 
 if __name__ == "__main__":
@@ -174,56 +196,83 @@ if __name__ == "__main__":
     print("datasets loaded", flush=True)
 
 
-    ########################################################################################
-    # select region & pick noon-values                      #
-    ########################################################################################
-
-    
+# In[7]:
 
 
 if __name__ == "__main__":
 
+    ########################################################################################
+    # select region & pick noon-values                      #
+    ########################################################################################
 
     ds.lon[ds.lon>180]=ds.lon[ds.lon>180]-360
     ds_reg=ds.sel(time=slice(time_min,time_max)).where((ds.lon > lon_min) & (ds.lon < lon_max) & (ds.lat > lat_min) & (ds.lat < lat_max),drop=True)
-
-    maxpoolsize = 6
-
+    
+    maxpoolsize = 4
+    
     varlist = ['2t','2d','sp','tp','10u','10v']
-
+    
     poolsize = max(len(varlist),maxpoolsize)
-
+    
     manager=Manager()
     noonvals=manager.dict()
 
-    with Pool(poolsize) as p:
+    for var in varlist:
+        compute_noonvals(ds_reg,noonvals,var)
+  
+#    with Pool(poolsize) as pool:
+#        iterable = itertools.zip_longest(itertools.repeat(ds_reg,len(varlist)),itertools.repeat(noonvals,len(varlist)),varlist)
+#        # chunks = chunk(list_a, multiprocessing.cpu_count())    
+#        for instance in pool.starmap(compute_noonvals, [ step for step in iterable ],chunksize=4):
+#            output = instance
+#            noonvals[instance[0]] = instance[1]
+#            del output
 
-        iterable = itertools.zip_longest(itertools.repeat(ds_reg,len(varlist)),itertools.repeat(noonvals,len(varlist)),varlist)
-        p.starmap(compute_noonvals,iterable)
-
+#    with Pool(poolsize) as p:
+#        
+#        iterable = itertools.zip_longest(itertools.repeat(ds_reg,len(varlist)),itertools.repeat(noonvals,len(varlist)),varlist)
+#        p.starmap(compute_noonvals,iterable)
+#        
     print("noon values selected",flush=True)
+
+
+# In[8]:
+
+
+if __name__ == "__main__":
 
     ########################################
     # compute wind speed from uas and vas  #
     ########################################
 
-    uas_unit = units.units(ds_reg['10u'].attrs.get("units"))
-    vas_unit = units.units(ds_reg['10v'].attrs.get("units"))
-    pr_unit = units.units(ds_reg['tp'].attrs.get("units"))
+    uas_unit = units(ds_reg['10u'].attrs.get("units"))
+    vas_unit = units(ds_reg['10v'].attrs.get("units"))
+    pr_unit = units(ds_reg['tp'].attrs.get("units"))
 
-    noonvals['wind_speed'] = calc.wind_speed(noonvals['10u'] * uas_unit ,noonvals['10v'] * vas_unit)
+    noonvals['wind_speed'] = metpy.calc.wind_speed(noonvals['10u'] * uas_unit ,noonvals['10v'] * vas_unit)
 
     print("computed noon values for wind speed",flush=True)
+
+
+# In[9]:
+
+
+if __name__ == "__main__":
 
     #####################################################
     # compute relative humidity from specific humidity  #
     #####################################################
 
-    dewpoint_unit = units.units(ds_reg['2d'].attrs.get("units"))
-    tas_unit = units.units(ds_reg['2t'].attrs.get("units"))
+    dewpoint_unit = units(ds_reg['2d'].attrs.get("units"))
+    tas_unit = units(ds_reg['2t'].attrs.get("units"))
 
-    noonvals['hurs'] = calc.relative_humidity_from_dewpoint(noonvals['2t'] * tas_unit, noonvals['2d'] * dewpoint_unit)
+    noonvals['hurs'] = metpy.calc.relative_humidity_from_dewpoint(noonvals['2t'] * tas_unit, noonvals['2d'] * dewpoint_unit)
 
+
+# In[ ]:
+
+
+if __name__ == "__main__":
 
     ######################################
     # interpolate data to lon-lat grid   #
@@ -235,7 +284,7 @@ if __name__ == "__main__":
     outlon = np.arange(lon_min,lon_max + res_out_x, res_out_x, dtype=float)
     outlat = np.arange(lat_min,lat_max + res_out_y, res_out_y, dtype=float)
 
-    maxpoolsize = 6
+    maxpoolsize = 3
     poolsize = max(len(varlist),maxpoolsize)
 
     varlist = ['2t','tp','10u','10v','wind_speed','hurs']
@@ -243,24 +292,29 @@ if __name__ == "__main__":
     manager=Manager()
     outvars_interpolated=manager.dict()
 
-    with Pool(poolsize) as p:
-
-        iterable = itertools.zip_longest(
-            [ noonvals[var] for var in varlist ],
-            itertools.repeat(outvars_interpolated,len(varlist)),
-            [ var for var in varlist ],
-            itertools.repeat(inlon,len(varlist)),
-            itertools.repeat(inlat,len(varlist)),
-            itertools.repeat(outlon,len(varlist)),
-            itertools.repeat(outlat,len(varlist)),
-            itertools.repeat(print("interpol_method=" + interpol_method),len(varlist))
-        )
+    for var in varlist:
+        interpolate_healpy2lonlat(noonvals[var],outvars_interpolated,var,inlon,inlat,outlon,outlat,print("interpol_method=" + interpol_method),len(varlist))
     
-        p.starmap(interpolate_healpy2lonlat,iterable)
+#    with Pool(poolsize) as p:
+#
+#        iterable = itertools.zip_longest(
+#            [ noonvals[var] for var in varlist ],
+#            itertools.repeat(outvars_interpolated,len(varlist)),
+#            [ var for var in varlist ],
+#            itertools.repeat(inlon,len(varlist)),
+#            itertools.repeat(inlat,len(varlist)),
+#            itertools.repeat(outlon,len(varlist)),
+#            itertools.repeat(outlat,len(varlist)),
+#            itertools.repeat(print("interpol_method=" + interpol_method),len(varlist))
+#        )
+    
+#        p.starmap(interpolate_healpy2lonlat,iterable)
 
-    #######################
-    # create output file  #
-    #######################
+
+# In[ ]:
+
+
+if __name__ == "__main__":
 
     dsout = xr.Dataset({
         "tas": (("time", "lat", "lon"), outvars_interpolated["2t"] - 273.15 , {"units": "degC"}),
@@ -276,3 +330,4 @@ if __name__ == "__main__":
         },)
 
     dsout.to_netcdf(filename_out)
+

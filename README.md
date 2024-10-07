@@ -18,7 +18,7 @@ Presumably, you will usually want to process several years at onse, so you may w
 Therefore, e.g. use the following command to proecess all years of the ICON future projections:
 
 ```
-for year in $(seq 2020 2050); do sbatch prepare_input_firedanger_ICON.job ${year}; done
+sbatch --array=2020-2049 prepare_input_firedanger_ICON.job
 ```
 
 It will take some minutes to preprocess all years, so feel free to take a short break.

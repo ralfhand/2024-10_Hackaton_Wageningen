@@ -49,9 +49,14 @@ if __name__ == "__main__":
     ######################################################################################################################
     ######################################################################################################################
 
-    time_min = YYYY + "-01-01"    # first date to be selected as YYYY-MM-DD (do not use 2020-01-01)
+  match YYYY:
+       case 2020:
+          time_min = YYYY + "-01-01"    # first date to be selected as YYYY-MM-DD (do not use 2020-01-01)
+       case _:
+          time_min = YYYY + "-01-02"
+ 
     time_max = YYYY + "-12-31"    # last date to be selected as YYYY-MM-DD
-
+ 
     print("writing output to ",filename_out, flush=True)
 
 #####################

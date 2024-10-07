@@ -29,9 +29,9 @@ if __name__ == "__main__":
     exp_id = "ngc4008"
     zoom=9                     # zoom level (should +/- fit with the resolution of the output)
 
-    lon_min = -135.            # region to be selected (as lon/lat, use negative values for western/southern hemisphere)
-    lon_max = -125.
-    lat_min = 20.
+    lon_min = -125.            # region to be selected (as lon/lat, use negative values for western/southern hemisphere)
+    lon_max = -115.
+    lat_min = 30.
     lat_max = 40.
 
     interpol_method="cubic"    # choose one out of nearest, linear, cubic 

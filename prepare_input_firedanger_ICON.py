@@ -40,9 +40,9 @@ if __name__ == "__main__":
     res_out_y = res_out_x      # resolution of the interpolated files in degree lat
 
     dirout="/work/bb1153/m300363/fireweather_data/California"
-    filename_out= dirout + "/inputvars_ICON_ngc4008_California_025deg_" + YYYY + "0102_" + YYYY + "1231.nc"   # keep YYYY somewhere in the filename 
-                                                                                                              # as this script will run multiple times
-                                                                                                              # called by one SLURM job per year 
+    filename_out= dirout + "/inputvars_ICON_ngc4008_California_025deg_" + YYYY + ".nc"   # keep YYYY somewhere in the filename 
+                                                                                         # as this script will run multiple times
+                                                                                         # called by one SLURM job per year 
 
     # end of customization section (usually there should be no need to change anything below this line
 

@@ -11,6 +11,8 @@
 import sys
 
 YYYY=sys.argv[1]
+maxpoolsize=int(sys.argv[2])
+
 
 if __name__ == "__main__":
 
@@ -34,7 +36,7 @@ if __name__ == "__main__":
     lat_min = 30.
     lat_max = 40.
 
-    interpol_method="cubic"    # choose one out of nearest, linear, cubic 
+    interpol_method="nearest"  # experimental. Use only nearest by now, otherwise missvals resulting from interpolation might cause terrible problems on the boundaries  # choose one out of nearest, linear, cubic 
 
     res_out_x = .25            # resolution of the interpolated files in degree lon
     res_out_y = res_out_x      # resolution of the interpolated files in degree lat
@@ -51,9 +53,11 @@ if __name__ == "__main__":
 
     match YYYY:
        case 2020:
+          time_min = YYYY + "-01-02"
+       case 1990:
           time_min = YYYY + "-01-01"    # first date to be selected as YYYY-MM-DD (do not use 2020-01-01)
        case _:
-          time_min = YYYY + "-01-02"
+          time_min = YYYY + "-01-01"
  
     time_max = YYYY + "-12-31"    # last date to be selected as YYYY-MM-DD
  
@@ -67,7 +71,7 @@ import os
 import intake
 import dask
 from dask.diagnostics import ProgressBar
-from multiprocessing import Pool, Manager
+from multiprocessing import Pool, Manager, current_process
 import pandas as pd
 import functools
 import itertools
@@ -133,6 +137,18 @@ def compute_noonvals(ds,arrayname,varname):
     
     return arrayname[varname]
 
+
+def compute_daymax(ds,arrayname,varname):
+
+    # print("select noon values for ds: " + str(ds) + ", varname: " + varname +". output will be appended to " + arrayname)
+
+    # var_sel = eval("ds." + varname + "* sel")
+    arrayname[varname] = ds[varname].resample(time="D").max()
+
+    return arrayname[varname]
+
+
+
 # @default_kwargs(interpol_method="linear")
 def interpolate_healpy2lonlat(input_array,output_array,varname,inlon,inlat,outlon,outlat,*args,**kwargs):
  
@@ -157,6 +173,9 @@ def interpolate_healpy2lonlat(input_array,output_array,varname,inlon,inlat,outlo
         values_interpolated[i][:][:] =  interpolate.griddata((inlon,inlat), values_tsel, (outgrid[0][:][:],outgrid[1][:][:]), method=interpol_method)
         i += 1
 
+    # print("interpolation to lon-lat for ",varname)    # without mp
+    print("interpolation to lon-lat for ",varname, " computed on ", current_process(),flush=True)    # with mp
+
     output_array[varname] = values_interpolated
     
     return output_array[varname]
@@ -171,11 +190,10 @@ if __name__ == "__main__":
     cat = intake.open_catalog("https://data.nextgems-h2020.eu/catalog.yaml")
     experiment = cat.ICON[exp_id]
 
-    ds_3h = experiment(time="PT3H", zoom=zoom, chunks="auto").to_dask().pipe(attach_coords)   # for 2m tempreature, precipitation, surface winds
+    ds_3h = experiment(time="PT3H", zoom=zoom, chunks="auto").to_dask().pipe(attach_coords)   # for 2m temperature, precipitation, surface winds
     ds_1d = experiment(time="P1D", zoom=zoom, chunks="auto").to_dask().pipe(attach_coords)    # for 2m spec. humidity
 
     print("datasets loaded", flush=True)
-
 
     ########################################################################################
     # select region & pick (almost) noon-values for 3-hourly data                          #
@@ -186,59 +204,98 @@ if __name__ == "__main__":
     ds_3h.lon[ds_3h.lon>180]=ds_3h.lon[ds_3h.lon>180]-360
     ds_3h_reg=ds_3h.sel(time=slice(time_min,time_max)).where((ds_3h.lon > lon_min) & (ds_3h.lon < lon_max) & (ds_3h.lat > lat_min) & (ds_3h.lat < lat_max),drop=True)
 
+    ds_1d.lon[ds_1d.lon>180]=ds_1d.lon[ds_1d.lon>180]-360
+    ds_1d_reg=ds_1d.sel(time=slice(time_min,time_max)).where((ds_1d.lon > lon_min) & (ds_1d.lon < lon_max) & (ds_1d.lat > lat_min) & (ds_1d.lat < lat_max),drop=True)
+
     print("select noon values", flush=True)
 
-    maxpoolsize = 4
-
-    varlist = ['tas','pr','uas','vas','qv2m','pres_sfc']
-    poolsize = max(len(varlist),maxpoolsize)
-
+    # maxpoolsize = 4
+    #
+    # varlist = ['tas','pr','uas','vas','qv2m','pres_sfc']
+    # poolsize = max(len(varlist),maxpoolsize)
+    
     manager=Manager()
     noonvals=manager.dict()
 
-    with Pool(poolsize) as p:
+    # with Pool(poolsize) as p:
+    #
+    #     iterable = itertools.zip_longest(itertools.repeat(ds_3h_reg,len(varlist)),itertools.repeat(noonvals,len(varlist)),varlist)
+    #     p.starmap(compute_noonvals,iterable)
+    #
+    # print("noon values selected",flush=True)
+    
+    ########################################################################################
+    # compute Tmax from 3-hourly data                                                      #
+    ########################################################################################
 
-        iterable = itertools.zip_longest(itertools.repeat(ds_3h_reg,len(varlist)),itertools.repeat(noonvals,len(varlist)),varlist)
-        p.starmap(compute_noonvals,iterable)
+    compute_daymax(ds_3h_reg,noonvals,"tas")
 
-    print("noon values selected",flush=True)
+    print("computed daily maximum temperature from 3-hourly data", flush=True)
 
-    ########################################
-    # compute wind speed from uas and vas  #
-    ########################################
+    ###################################################
+    # compute wind speed from mean daily uas and vas  #
+    ###################################################
 
-    uas_unit = units(ds_3h_reg.uas.attrs.get("units"))
-    vas_unit = units(ds_3h_reg.vas.attrs.get("units"))
-    pr_unit = units(ds_3h_reg.pr.attrs.get("units"))
+    noonvals['uas'] = ds_1d_reg['uas']
+    noonvals['vas'] = ds_1d_reg['vas']
+
+    uas_unit = units(ds_1d_reg.uas.attrs.get("units"))
+    vas_unit = units(ds_1d_reg.vas.attrs.get("units"))
+    wind_speed_unit = uas_unit 
 
     noonvals['wind_speed'] = metpy.calc.wind_speed(noonvals['uas'] * uas_unit ,noonvals['vas'] * vas_unit)
 
     print("computed noon values for wind speed",flush=True)
 
+    ################
+    # get daily pr #
+    ################
+
+    pr_unit = units(ds_1d_reg.pr.attrs.get("units"))
+    noonvals['pr'] = ds_1d_reg['pr'] * 86400
+    pr_unit = "mm"
+
+    print("extracted daily wind_speed and precip",flush=True)
+
     #####################################################
     # compute relative humidity from specific humidity  #
     #####################################################
 
-    huss_unit = units(ds_3h_reg.qv2m.attrs.get("units"))
-    pres_sfc_unit = units(ds_3h_reg.pres_sfc.attrs.get("units"))
-    tas_unit = units(ds_3h_reg.tas.attrs.get("units"))
+    huss_unit = units(ds_1d_reg.qv2m.attrs.get("units"))
+    noonvals['huss'] = ds_1d_reg['qv2m']
 
-    noonvals['hurs'] = metpy.calc.relative_humidity_from_specific_humidity(noonvals['pres_sfc'] * pres_sfc_unit, noonvals['tas'] * tas_unit , noonvals['qv2m'] * huss_unit)
+    pres_sfc_unit = units(ds_1d_reg.pres_sfc.attrs.get("units"))
+    noonvals['pres_sfc'] = ds_1d_reg['pres_sfc']
+
+    tas_unit = units(ds_1d_reg.tas.attrs.get("units"))
+
+    noonvals['hurs'] = metpy.calc.relative_humidity_from_specific_humidity(noonvals['pres_sfc'] * pres_sfc_unit, noonvals['tas'] * tas_unit , noonvals['huss'] * huss_unit) * 100
+    noonvals['hurs'] = noonvals['hurs'].where((noonvals['hurs'] < 100 ),100)
+    hurs_unit = "%"
 
     print("computed noon values for relative humidity",flush=True)
+     
+    ########################
+    # convert tas to degC  #
+    ########################
+
+    noonvals["tas"] =  noonvals["tas"] -273.15
+    tas_unit = "C"
+
+    wind_speed_unit="m/s"
 
     ######################################
     # interpolate data to lon-lat grid   #
     ######################################
 
-    inlon = np.asarray(ds_3h_reg.lon)
-    inlat = np.asarray(ds_3h_reg.lat)
+    inlon = np.asarray(ds_1d_reg.lon)
+    inlat = np.asarray(ds_1d_reg.lat)
     outlon = np.arange(lon_min,lon_max + res_out_x, res_out_x, dtype=float)
     outlat = np.arange(lat_min,lat_max + res_out_y, res_out_y, dtype=float)
 
-    maxpoolsize = 5
+    maxpoolsize = 4
 
-    varlist = ['tas','pr','uas','vas','wind_speed','hurs']
+    varlist = ['tas','pr','wind_speed','hurs']
 
     poolsize = max(len(varlist),maxpoolsize)
 
@@ -260,21 +317,23 @@ if __name__ == "__main__":
     
         p.starmap(interpolate_healpy2lonlat,iterable)
 
+    outvars_interpolated['hurs'] = np.where((outvars_interpolated['hurs'] < 100),outvars_interpolated['hurs'],100)
+
     #######################
     # create output file  #
     #######################
 
+    print("writting outdata to",filename_out,flush="True")
+
     dsout = xr.Dataset({
-            "tas": (("time", "lat", "lon"), outvars_interpolated["tas"] - 273.15 , {"units": "degC"}),
-            "wind_speed": (("time", "lat", "lon"), outvars_interpolated["wind_speed"], {"units": str(tas_unit)}),
-            "uas": (("time", "lat", "lon"), outvars_interpolated["uas"], {"units": str(uas_unit)}),
-            "vas": (("time", "lat", "lon"), outvars_interpolated["vas"], {"units": str(vas_unit)}),
+            "tas": (("time", "lat", "lon"), outvars_interpolated["tas"] , {"units": str(tas_unit)}),
+            "wind_speed": (("time", "lat", "lon"), outvars_interpolated["wind_speed"], {"units": str(wind_speed_unit)}),
             "pr": (("time", "lat", "lon"), outvars_interpolated["pr"], {"units": str(pr_unit)}),
-            "hurs": (("time", "lat", "lon"), outvars_interpolated["hurs"], {"units": "1"})},
+            "hurs": (("time", "lat", "lon"), outvars_interpolated["hurs"], {"units": str(hurs_unit)})},
             coords={
             "time": [ datetime.strptime(np.datetime_as_string(x,unit="D") + "T12:00:00", "%Y-%m-%dT%H:%M:%S") for x in noonvals["tas"].time ], 
             "lat": ("lat", outlat, {"units": "degree_north"}),
             "lon": ("lon", outlon, {"units": "degree_east"}),
             },)
 
-    dsout.to_netcdf(filename_out)
+    dsout.to_netcdf(filename_out,mode="w")

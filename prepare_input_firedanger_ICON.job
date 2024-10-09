@@ -4,20 +4,31 @@
 #SBATCH --partition=compute    # Specify partition name
 #SBATCH --nodes=1
 #SBATCH --exclusive
-#SBATCH --tasks-per-node=6
+#SBATCH --tasks-per-node=4
 #SBATCH --mem=256G              # Specify amount of memory needed
 #SBATCH --time=08:00:00        # Set a limit on the total run time
 #SBATCH --mail-type=FAIL       # Notify user by email in case of job failure
 #SBATCH --account=bb1153       # Charge resources on this project account
 #SBATCH --output=logs/prepare_firedanger_ICON.o%A_%a    # File name for standard output
 
+ 
 module load python3/unstable
-
+ 
 # year=$1
 year=$SLURM_ARRAY_TASK_ID
-
-echo "srun --cpus-per-task=30 python3 -u prepare_input_firedanger_ICON.py ${year}"
-
-srun --cpus-per-task=30 python3 -u prepare_input_firedanger_ICON.py ${year}
+ 
+echo "NNODES: $SLURM_NNODES"
+echo "TASKS PER NODE: $SLURM_NTASKS_PER_NODE"
+ 
+cpus_per_task=$( echo "$SLURM_CPUS_ON_NODE / $SLURM_NTASKS_PER_NODE" | bc )
+maxpoolsize=$( echo "$SLURM_NNODES * $SLURM_NTASKS_PER_NODE" | bc )
+ 
+cmd="srun --ntasks=1 --cpus-per-task=${cpus_per_task} python3 -u prepare_input_firedanger_ICON.py ${year} ${maxpoolsize}"
+ 
+echo "cmd: ${cmd}"
+ 
+${cmd}
+ 
+exit 0
 
 exit 0

@@ -1,14 +1,12 @@
 #!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
-#!/usr/bin/env python
  
 # This script preprocesses the IFS data to create input files for the firedanger tool written by Daniel Steinfeld.
 # The preprocessing includes the selection of subregions, the time period, and variables and the interpolation from Healpix format to a lon-lat grid.
 # Customization can be done in the customization section below.
+#
+# In the current configuration the script computes wind_speed from daily mean u- and v-wind (daily mean of hourly u10 and v10), daily max temperature
+# (daily max of hourly 2t), daily mean precipitation (daily mean of hourly tprate) and daily min relative humidity from daily mean dewpoint tempreature (daily mean of 2d)
+# and daily max temperature (as above). All hourly variables were taken from 2D_hourly_0.25deg.
 
 import sys
  
@@ -63,10 +61,6 @@ if __name__ == "__main__":
  
     print("writing output to ",filename_out, flush=True)
 
-
-# In[2]:
-
-
 #####################
 # import libraries  #
 #####################
@@ -94,10 +88,6 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 # import logging
 from collections.abc import Iterable
-
-
-# In[11]:
-
 
 ####################
 # define functions #
@@ -131,6 +121,8 @@ def compute_lhour(ds):
 
 def compute_noonvals(ds,arrayname,varname):
 
+    # currently obsolete. Kept for eventuaöl later usage
+ 
     # print("select noon values for ds: " + str(ds) + ", varname: " + varname +". output will be appended to " + arrayname)
     
     lhour=compute_lhour(ds)
@@ -217,10 +209,6 @@ def interpolate_healpy2lonlat(input_array,output_array,varname,inlon,inlat,outlo
     
     return output_array[varname]
 
-
-# In[4]:
-
-
 if __name__ == "__main__":
 
     ##########################
@@ -233,10 +221,6 @@ if __name__ == "__main__":
 
     ds = experiment(chunks="auto").to_dask().pipe(attach_coords)
     print("datasets loaded", flush=True)
-
-
-# In[7]:
-
 
 if __name__ == "__main__":
 
@@ -286,9 +270,6 @@ if __name__ == "__main__":
 
     print("noon values selected",flush=True)
 
-# In[8]:
-
-
 if __name__ == "__main__":
 
     ########################################
@@ -311,9 +292,6 @@ if __name__ == "__main__":
 
     noonvals['tprate'] = noonvals['tprate'] * 86400
     pr_unit = "mm"
-
-# In[9]:
-
 
 if __name__ == "__main__":
 
@@ -343,9 +321,6 @@ if __name__ == "__main__":
 
     print("converted all units",flush=True)
 
-# In[ ]:
-
-
 if __name__ == "__main__":
 
     ######################################
@@ -358,7 +333,6 @@ if __name__ == "__main__":
     outlat = np.arange(lat_min,lat_max + res_out_y, res_out_y, dtype=float)
 
     poolsize = maxpoolsize
-#    poolsize = max(len(varlist),maxpoolsize)
 
     # varlist = ['2t','tp','10u','10v','wind_speed','hurs']
     varlist = ['2t','tprate','wind_speed','hurs']
@@ -366,6 +340,7 @@ if __name__ == "__main__":
     manager=Manager()
     outvars_interpolated=manager.dict()
 
+## fallback: non parallelized loop
 #    for var in varlist:
 #        interpolate_healpy2lonlat(noonvals[var],outvars_interpolated,var,inlon,inlat,outlon,outlat,print("interpol_method=" + interpol_method),len(varlist))
     
@@ -383,19 +358,6 @@ if __name__ == "__main__":
         )
     
         p.starmap(interpolate_healpy2lonlat,iterable)
-
-#    jobs=[]
-#
-#    for var in varlist:
-#        p = Process(target=interpolate_healpy2lonlat,args=(noonvals[var],outvars_interpolated,var,inlon,inlat,outlon,outlat,print("interpol_method=" + interpol_method),len(varlist)))
-#        jobs.append(p)
-#        p.start()
-#
-#    for proc in jobs:
-#        proc.join()
-
-# In[ ]:
-
      
     outvars_interpolated['hurs'] = np.where((outvars_interpolated['hurs'] < 100),outvars_interpolated['hurs'],100)
 

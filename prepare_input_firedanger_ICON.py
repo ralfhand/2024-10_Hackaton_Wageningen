@@ -4,9 +4,9 @@
 # The preprocessing includes the selection of subregions, the time period, and variables and the interpolation from Healpix format to a lon-lat grid. 
 # Customization can be done in the customization section below.
 # 
-# Limitations: The firedanger tool needs noon values for several variables. As output was only available on 3-hourly timesteps, 
-# for time zones where 12:00 values where not available due to the 3-hourly resolution of these variables, 11:00 or 13:00 values where selected instead.
-# Relative humidity was computed from specific humidity.
+# In the current configuration the script computes wind_speed from daily mean u- and v-wind (uas and vas from P1D), daily max temperature (max of tas from PT3H), 
+# and extracts daily mean precipitation rates (pr from P1D). Minimum relative humidity was computed from daily mean specific humidity (qv2m from P1D) and daily max
+# temperature (as above).
 
 import sys
 

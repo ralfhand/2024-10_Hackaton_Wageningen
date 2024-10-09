@@ -13,6 +13,7 @@
 import sys
  
 YYYY=sys.argv[1]
+maxpoolsize=int(sys.argv[2])
 
 if __name__ == "__main__":
  
@@ -36,13 +37,13 @@ if __name__ == "__main__":
     lat_min = 30.
     lat_max = 40.
  
-    interpol_method="cubic"    # choose one out of nearest, linear, cubic 
+    interpol_method="nearest"  # experimental. Use only nearest by now, otherwise missvals at the boundaries might cause terrible problems.  # choose one out of nearest, linear, cubic 
  
     res_out_x = .25            # resolution of the interpolated files in degree lon
     res_out_y = res_out_x      # resolution of the interpolated files in degree lat
  
     dirout="/work/bb1153/m300363/fireweather_data/California"
-    filename_out= dirout + "/inputvars_IFS_9-FESOM_5-production_California_025deg_" + YYYY + ".nc"   # keep YYYY somewhere in the filename 
+    filename_out= dirout + "/inputvars_" + exp_id + "_California_025deg_" + YYYY + ".nc"   # keep YYYY somewhere in the filename 
                                                                                          # as this script will run multiple times
                                                                                          # called by one SLURM job per year 
  
@@ -53,10 +54,10 @@ if __name__ == "__main__":
  
  
     match YYYY:
-       case 2020:
+       case 2020 | 1990:
           time_min = YYYY + "-01-01"    # first date to be selected as YYYY-MM-DD (do not use 2020-01-01)
        case _:
-          time_min = YYYY + "-01-02"
+          time_min = YYYY + "-01-01"
  
     time_max = YYYY + "-12-31"    # last date to be selected as YYYY-MM-DD
  
@@ -74,7 +75,7 @@ import os
 import intake
 import dask
 from dask.diagnostics import ProgressBar
-from multiprocessing import Pool, Manager
+from multiprocessing import Pool, Manager, Process, current_process
 import pandas as pd
 import functools
 import itertools
@@ -133,6 +134,7 @@ def compute_noonvals(ds,arrayname,varname):
     # print("select noon values for ds: " + str(ds) + ", varname: " + varname +". output will be appended to " + arrayname)
     
     lhour=compute_lhour(ds)
+    print("lhour computed")
     sel = np.where((lhour == 12),1,0)
     # var_sel = eval("ds." + varname + "* sel")
     var_sel = ds[varname] * sel
@@ -140,10 +142,47 @@ def compute_noonvals(ds,arrayname,varname):
 
     del lhour,sel,var_sel
 
-    print("noonvals for ",varname)    # without mp
-    #print("noonvals for ",varname, " computed on ", current_process(),flush=True)    # with mp
+    # print("noonvals for ",varname)    # without mp
+    print("noonvals for ",varname, " computed on ", current_process(),flush=True)    # with mp
     
     return arrayname[varname]
+
+def compute_daymax(ds,arrayname,varname):
+ 
+    # print("select noon values for ds: " + str(ds) + ", varname: " + varname +". output will be appended to " + arrayname)
+ 
+    # var_sel = eval("ds." + varname + "* sel")
+    arrayname[varname] = ds[varname].resample(time="D").max()
+
+    # print("noonvals for ",varname)    # without mp
+    print("daymax for ",varname, " computed on ", current_process(),flush=True)    # with mp
+    
+    return arrayname[varname]
+
+def compute_daymin(ds,arrayname,varname):
+ 
+    # print("select noon values for ds: " + str(ds) + ", varname: " + varname +". output will be appended to " + arrayname)
+ 
+    # var_sel = eval("ds." + varname + "* sel")
+    arrayname[varname] = ds[varname].resample(time="D").min()
+
+    # print("noonvals for ",varname)    # without mp
+    print("daymin for ",varname, " computed on ", current_process(),flush=True)    # with mp
+    
+    return arrayname[varname]
+
+def compute_daymean(ds,arrayname,varname):
+ 
+    # print("select noon values for ds: " + str(ds) + ", varname: " + varname +". output will be appended to " + arrayname)
+ 
+    # var_sel = eval("ds." + varname + "* sel")
+    arrayname[varname] = ds[varname].resample(time="D").mean()
+
+    # print("noonvals for ",varname)    # without mp
+    print("daymean for ",varname, " computed on ", current_process(),flush=True)    # with mp
+    
+    return arrayname[varname]
+
 
 # @default_kwargs(interpol_method="linear")
 def interpolate_healpy2lonlat(input_array,output_array,varname,inlon,inlat,outlon,outlat,*args,**kwargs):
@@ -162,7 +201,7 @@ def interpolate_healpy2lonlat(input_array,output_array,varname,inlon,inlat,outlo
         _month=datetime.strptime(np.datetime_as_string(date["time"],unit="D"),"%Y-%m-%d").month
         _year=datetime.strptime(np.datetime_as_string(date["time"],unit="D"),"%Y-%m-%d").year
 
-        if ( _day == 1 ):
+        if ( _day == 2 ):
            print("interpolating data for ",varname," MM-YYYY = ", _month,"-",_year,flush=True)                                                        
 
         values_tsel=input_array.sel(time=date) # .drop(time)
@@ -173,8 +212,8 @@ def interpolate_healpy2lonlat(input_array,output_array,varname,inlon,inlat,outlo
 
     del values_interpolated
 
-    print("interpolation to lon-lat for ",varname)    # without mp
-    # print("interpolation to lon-lat for ",varname, " computed on ", current_process(),flush=True)    # with mp
+    # print("interpolation to lon-lat for ",varname)    # without mp
+    print("interpolation to lon-lat for ",varname, " computed on ", current_process(),flush=True)    # with mp
     
     return output_array[varname]
 
@@ -208,33 +247,44 @@ if __name__ == "__main__":
     ds.lon[ds.lon>180]=ds.lon[ds.lon>180]-360
     ds_reg=ds.sel(time=slice(time_min,time_max)).where((ds.lon > lon_min) & (ds.lon < lon_max) & (ds.lat > lat_min) & (ds.lat < lat_max),drop=True)
     
-    maxpoolsize = 4
+    poolsize = maxpoolsize 
     
-    varlist = ['2t','2d','sp','tp','10u','10v']
-    
-    poolsize = max(len(varlist),maxpoolsize)
+    varlist = ['2d','tprate','10u','10v']
+
+    # poolsize = (len(varlist),maxpoolsize)
     
     manager=Manager()
     noonvals=manager.dict()
 
-    for var in varlist:
-        compute_noonvals(ds_reg,noonvals,var)
-  
+#    for var in varlist:
+#        compute_noonvals(ds_reg,noonvals,var)
+ 
+#    jobs=[]
+ 
+#    for var in varlist:
+#        p = Process(target=compute_noonvals,args=(ds_reg,noonvals,var))
+#        jobs.append(p)
+#        p.start()
+ 
+#    for proc in jobs:
+#        proc.join()
+ 
 #    with Pool(poolsize) as pool:
 #        iterable = itertools.zip_longest(itertools.repeat(ds_reg,len(varlist)),itertools.repeat(noonvals,len(varlist)),varlist)
 #        # chunks = chunk(list_a, multiprocessing.cpu_count())    
-#        for instance in pool.starmap(compute_noonvals, [ step for step in iterable ],chunksize=4):
+#        for instance in pool.starmap(compute_noonvals, [ step for step in iterable ],chunksize=poolsize):
 #            output = instance
 #            noonvals[instance[0]] = instance[1]
 #            del output
 
-#    with Pool(poolsize) as p:
+    with Pool(poolsize) as p:
+        
+        iterable = itertools.zip_longest(itertools.repeat(ds_reg,len(varlist)),itertools.repeat(noonvals,len(varlist)),varlist)
+        p.starmap(compute_daymean,iterable)
 #        
-#        iterable = itertools.zip_longest(itertools.repeat(ds_reg,len(varlist)),itertools.repeat(noonvals,len(varlist)),varlist)
-#        p.starmap(compute_noonvals,iterable)
-#        
-    print("noon values selected",flush=True)
+    compute_daymax(ds_reg,noonvals,"2t")
 
+    print("noon values selected",flush=True)
 
 # In[8]:
 
@@ -247,12 +297,20 @@ if __name__ == "__main__":
 
     uas_unit = units(ds_reg['10u'].attrs.get("units"))
     vas_unit = units(ds_reg['10v'].attrs.get("units"))
-    pr_unit = units(ds_reg['tp'].attrs.get("units"))
 
     noonvals['wind_speed'] = metpy.calc.wind_speed(noonvals['10u'] * uas_unit ,noonvals['10v'] * vas_unit)
 
     print("computed noon values for wind speed",flush=True)
 
+
+    ########################################
+    # convert tprate to mm/day             #
+    ########################################
+
+    pr_unit = units(ds_reg['tp'].attrs.get("units"))
+
+    noonvals['tprate'] = noonvals['tprate'] * 86400
+    pr_unit = "mm"
 
 # In[9]:
 
@@ -267,7 +325,23 @@ if __name__ == "__main__":
     tas_unit = units(ds_reg['2t'].attrs.get("units"))
 
     noonvals['hurs'] = metpy.calc.relative_humidity_from_dewpoint(noonvals['2t'] * tas_unit, noonvals['2d'] * dewpoint_unit)
+    noonvals['hurs'] = noonvals['hurs'].where((noonvals['hurs'] < 1 ),1) * 100
 
+    hurs_unit="%"
+
+    print("computed value for relative humidity",flush=True)
+
+ 
+    #####################################################
+    # compute relative humidity from specific humidity  #
+    #####################################################
+
+    noonvals["2t"] = noonvals["2t"] - 273.15
+    tas_unit = "C" 
+
+    wind_speed_unit="m/s"
+
+    print("converted all units",flush=True)
 
 # In[ ]:
 
@@ -278,56 +352,68 @@ if __name__ == "__main__":
     # interpolate data to lon-lat grid   #
     ######################################
 
-
     inlon = np.asarray(ds_reg.lon)
     inlat = np.asarray(ds_reg.lat)
     outlon = np.arange(lon_min,lon_max + res_out_x, res_out_x, dtype=float)
     outlat = np.arange(lat_min,lat_max + res_out_y, res_out_y, dtype=float)
 
-    maxpoolsize = 3
-    poolsize = max(len(varlist),maxpoolsize)
+    poolsize = maxpoolsize
+#    poolsize = max(len(varlist),maxpoolsize)
 
-    varlist = ['2t','tp','10u','10v','wind_speed','hurs']
+    # varlist = ['2t','tp','10u','10v','wind_speed','hurs']
+    varlist = ['2t','tprate','wind_speed','hurs']
 
     manager=Manager()
     outvars_interpolated=manager.dict()
 
-    for var in varlist:
-        interpolate_healpy2lonlat(noonvals[var],outvars_interpolated,var,inlon,inlat,outlon,outlat,print("interpol_method=" + interpol_method),len(varlist))
+#    for var in varlist:
+#        interpolate_healpy2lonlat(noonvals[var],outvars_interpolated,var,inlon,inlat,outlon,outlat,print("interpol_method=" + interpol_method),len(varlist))
     
-#    with Pool(poolsize) as p:
-#
-#        iterable = itertools.zip_longest(
-#            [ noonvals[var] for var in varlist ],
-#            itertools.repeat(outvars_interpolated,len(varlist)),
-#            [ var for var in varlist ],
-#            itertools.repeat(inlon,len(varlist)),
-#            itertools.repeat(inlat,len(varlist)),
-#            itertools.repeat(outlon,len(varlist)),
-#            itertools.repeat(outlat,len(varlist)),
-#            itertools.repeat(print("interpol_method=" + interpol_method),len(varlist))
-#        )
-    
-#        p.starmap(interpolate_healpy2lonlat,iterable)
+    with Pool(poolsize) as p:
 
+        iterable = itertools.zip_longest(
+            [ noonvals[var] for var in varlist ],
+            itertools.repeat(outvars_interpolated,len(varlist)),
+            [ var for var in varlist ],
+            itertools.repeat(inlon,len(varlist)),
+            itertools.repeat(inlat,len(varlist)),
+            itertools.repeat(outlon,len(varlist)),
+            itertools.repeat(outlat,len(varlist)),
+            itertools.repeat(print("interpol_method=" + interpol_method),len(varlist))
+        )
+    
+        p.starmap(interpolate_healpy2lonlat,iterable)
+
+#    jobs=[]
+#
+#    for var in varlist:
+#        p = Process(target=interpolate_healpy2lonlat,args=(noonvals[var],outvars_interpolated,var,inlon,inlat,outlon,outlat,print("interpol_method=" + interpol_method),len(varlist)))
+#        jobs.append(p)
+#        p.start()
+#
+#    for proc in jobs:
+#        proc.join()
 
 # In[ ]:
 
+     
+    outvars_interpolated['hurs'] = np.where((outvars_interpolated['hurs'] < 100),outvars_interpolated['hurs'],100)
 
 if __name__ == "__main__":
 
+    print("writting outdata to",filename_out,flush="True")
+
     dsout = xr.Dataset({
-        "tas": (("time", "lat", "lon"), outvars_interpolated["2t"] - 273.15 , {"units": "degC"}),
-        "wind_speed": (("time", "lat", "lon"), outvars_interpolated["wind_speed"], {"units": str(tas_unit)}),
-        "uas": (("time", "lat", "lon"), outvars_interpolated["10u"], {"units": str(uas_unit)}),
-        "vas": (("time", "lat", "lon"), outvars_interpolated["10v"], {"units": str(vas_unit)}),
-        "pr": (("time", "lat", "lon"), outvars_interpolated["tp"], {"units": str(pr_unit)}),
-        "hurs": (("time", "lat", "lon"), outvars_interpolated["hurs"], {"units": "1"})},
+        "tas": (("time", "lat", "lon"), outvars_interpolated["2t"] , {"units": str(tas_unit)}),
+        "wind_speed": (("time", "lat", "lon"), outvars_interpolated["wind_speed"], {"units": str(wind_speed_unit)}),
+        "pr": (("time", "lat", "lon"), outvars_interpolated["tprate"], {"units": str(pr_unit)}),
+        "hurs": (("time", "lat", "lon"), outvars_interpolated["hurs"], {"units": str(hurs_unit)})},
         coords={
-        "time": [ datetime.strptime(np.datetime_as_string(x,unit="D") + "T12:00:00", "%Y-%m-%dT%H:%M:%S") for x in noonvals["2t"].time ], 
+        "time": [ datetime.strptime(np.datetime_as_string(x,unit="D") + "T12:00:00", "%Y-%m-%dT%H:%M:%S") for x in noonvals["2t"].time ],
         "lat": ("lat", outlat, {"units": "degree_north"}),
         "lon": ("lon", outlon, {"units": "degree_east"}),
         },)
-
+ 
     dsout.to_netcdf(filename_out)
+
 

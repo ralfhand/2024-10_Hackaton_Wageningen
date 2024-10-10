@@ -1,4 +1,4 @@
-# 2024-10-NextGEMS-firedanger challenge software package
+# 2024-10-NextGEMS - Firedanger challenge software package
 
 This repository contains some pathon scripts, Jupyter Notebooks and SLURM Job examples as a starting point for the firedanger challenge at the Next-GEMS Hackaton in Wageningen, October 2024
 
@@ -10,6 +10,13 @@ The repo contains the following files:
 - prepare_input_firedanger_IFS.job
 - compute_fwi.ipynb
 - plot_input_and_fwi_components.ipynb
+
+you can clone this repository by using the following command in your levante home directory:
+
+```
+git clone https://gitlab.dkrz.de/m300363/2024-10_hackaton_wageningen .
+
+```
 
 ## Preparation of fire danger variables using prepare_input_firedanger_*
 

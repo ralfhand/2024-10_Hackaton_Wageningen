@@ -14,6 +14,7 @@ The repo contains the following files:
 you can clone this repository by using the following command in your levante home directory:
 
 ```
+mkdir [directory name of your choice] && cd [directory name of your choice]
 git clone https://gitlab.dkrz.de/m300363/2024-10_hackaton_wageningen .
 
 ```

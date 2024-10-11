@@ -363,16 +363,18 @@ def main():
     print("writting outdata to",filename_out,flush="True")
 
     dsout = xr.Dataset({
-        "tas": (("time", "lat", "lon"), outvars_interpolated["2t"] , {"units": str(tas_unit)}),
-        "wind_speed": (("time", "lat", "lon"), outvars_interpolated["wind_speed"], {"units": str(wind_speed_unit)}),
-        "pr": (("time", "lat", "lon"), outvars_interpolated["tprate"], {"units": str(pr_unit)}),
-        "hurs": (("time", "lat", "lon"), outvars_interpolated["hurs"], {"units": str(hurs_unit)})},
+        "tas": (("time", "lat", "lon"), outvars_interpolated["2t"] , {"units": str(tas_unit), "long_name": "2m temperature"}),
+        "wind_speed": (("time", "lat", "lon"), outvars_interpolated["wind_speed"], {"units": str(wind_speed_unit), "long_name": "10m wind speed"}),
+        "pr": (("time", "lat", "lon"), outvars_interpolated["tprate"], {"units": str(pr_unit), "long_name": "precipitation rate"}),
+        "hurs": (("time", "lat", "lon"), outvars_interpolated["hurs"], {"units": str(hurs_unit),  "long_name": "surface relative humidity"})},
         coords={
         "time": [ datetime.strptime(np.datetime_as_string(x,unit="D") + "T12:00:00", "%Y-%m-%dT%H:%M:%S") for x in noonvals["2t"].time ],
-        "lat": ("lat", outlat, {"units": "degree_north"}),
-        "lon": ("lon", outlon, {"units": "degree_east"}),
+        "lat": ("lat", outlat, {"units": "degree_north", "long_name": "latitude"}),
+        "lon": ("lon", outlon, {"units": "degree_east", "long_name": "2m temperature"}),
         },)
- 
+
+
+
     dsout.to_netcdf(filename_out)
 
 if __name__ == "__main__":

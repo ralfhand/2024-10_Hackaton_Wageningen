@@ -14,12 +14,14 @@ YYYY=sys.argv[1]
 maxpoolsize=int(sys.argv[2])
 
 
-if __name__ == "__main__":
+def customization():
+
+    global exp_id, zoom, lon_min, lon_max, lat_min, lat_max, interpol_method, res_out_x, res_out_y, dir_out, dir_out, filename_out, time_min, time_max
 
     ####################################################################################################################
     ####################################################################################################################
 
-    # c u s t o m i z a t i o n   s e c t i o n 
+    # c u s t o m i z a t i o n   s e c t i o n
 
     ####################################################################################################################
     ####################################################################################################################
@@ -36,13 +38,14 @@ if __name__ == "__main__":
     lat_min = 30.
     lat_max = 40.
 
-    interpol_method="nearest"  # experimental. Use only nearest by now, otherwise missvals resulting from interpolation might cause terrible problems on the boundaries  # choose one out of nearest, linear, cubic 
+    interpol_method="nearest"  # experimental. Use only nearest by now, otherwise missvals at the boundaries might cause terrible problems.  
+                               # to be moodified to choose one out of nearest, linear, cubic  
 
     res_out_x = .25            # resolution of the interpolated files in degree lon
     res_out_y = res_out_x      # resolution of the interpolated files in degree lat
 
-    dirout="/work/bb1153/m300363/fireweather_data/California"
-    filename_out= dirout + "/inputvars_ICON_ngc4008_California_025deg_" + YYYY + ".nc"   # keep YYYY somewhere in the filename 
+    dir_out="/work/bb1153/m300363/fireweather_data/California"
+    filename_out= dir_out + "/inputvars_ICON_ngc4008_California_025deg_" + YYYY + ".nc"   # keep YYYY somewhere in the filename 
                                                                                          # as this script will run multiple times
                                                                                          # called by one SLURM job per year 
 
@@ -62,6 +65,9 @@ if __name__ == "__main__":
     time_max = YYYY + "-12-31"    # last date to be selected as YYYY-MM-DD
  
     print("writing output to ",filename_out, flush=True)
+
+    return exp_id, zoom, lon_min, lon_max, lat_min, lat_max, interpol_method, res_out_x, res_out_y, dir_out, dir_out, filename_out, time_min, time_max
+
 
 #####################
 # import libraries  #
@@ -181,8 +187,10 @@ def interpolate_healpy2lonlat(input_array,output_array,varname,inlon,inlat,outlo
     return output_array[varname]
 
 
-if __name__ == "__main__":
+def main():
 
+    customization()
+    
     ##########################
     # load datasets (ICON)   #
     ##########################
@@ -337,3 +345,6 @@ if __name__ == "__main__":
             },)
 
     dsout.to_netcdf(filename_out,mode="w")
+
+if __name__ == "__main__":
+    main()

@@ -13,8 +13,10 @@ import sys
 YYYY=sys.argv[1]
 maxpoolsize=int(sys.argv[2])
 
-if __name__ == "__main__":
- 
+def customization():
+
+    global exp_id, time, lon_min, lon_max, lat_min, lat_max, interpol_method, res_out_x, res_out_y, dir_out, dir_out, filename_out, time_min, time_max
+
     ####################################################################################################################
     ####################################################################################################################
  
@@ -35,13 +37,14 @@ if __name__ == "__main__":
     lat_min = 30.
     lat_max = 40.
  
-    interpol_method="nearest"  # experimental. Use only nearest by now, otherwise missvals at the boundaries might cause terrible problems.  # choose one out of nearest, linear, cubic 
+    interpol_method="nearest"  # experimental. Use only nearest by now, otherwise missvals at the boundaries might cause terrible problems.  
+                               # to be moodified to choose one out of nearest, linear, cubic 
  
     res_out_x = .25            # resolution of the interpolated files in degree lon
     res_out_y = res_out_x      # resolution of the interpolated files in degree lat
  
-    dirout="/work/bb1153/m300363/fireweather_data/California"
-    filename_out= dirout + "/inputvars_" + exp_id + "_California_025deg_" + YYYY + ".nc"   # keep YYYY somewhere in the filename 
+    dir_out="/work/bb1153/m300363/fireweather_data/California"
+    filename_out= dir_out + "/inputvars_" + exp_id + "_California_025deg_" + YYYY + ".nc"   # keep YYYY somewhere in the filename 
                                                                                          # as this script will run multiple times
                                                                                          # called by one SLURM job per year 
  
@@ -60,6 +63,8 @@ if __name__ == "__main__":
     time_max = YYYY + "-12-31"    # last date to be selected as YYYY-MM-DD
  
     print("writing output to ",filename_out, flush=True)
+
+    return exp_id, time, lon_min, lon_max, lat_min, lat_max, interpol_method, res_out_x, res_out_y, dir_out, dir_out, filename_out, time_min, time_max
 
 #####################
 # import libraries  #
@@ -209,8 +214,10 @@ def interpolate_healpy2lonlat(input_array,output_array,varname,inlon,inlat,outlo
     
     return output_array[varname]
 
-if __name__ == "__main__":
+def main():
 
+    customization()
+    
     ##########################
     # load datasets (IFS)   #
     ##########################
@@ -221,8 +228,6 @@ if __name__ == "__main__":
 
     ds = experiment(chunks="auto").to_dask().pipe(attach_coords)
     print("datasets loaded", flush=True)
-
-if __name__ == "__main__":
 
     ########################################################################################
     # select region & pick noon-values                      #
@@ -270,8 +275,6 @@ if __name__ == "__main__":
 
     print("noon values selected",flush=True)
 
-if __name__ == "__main__":
-
     ########################################
     # compute wind speed from uas and vas  #
     ########################################
@@ -292,8 +295,6 @@ if __name__ == "__main__":
 
     noonvals['tprate'] = noonvals['tprate'] * 86400
     pr_unit = "mm"
-
-if __name__ == "__main__":
 
     #####################################################
     # compute relative humidity from specific humidity  #
@@ -320,8 +321,6 @@ if __name__ == "__main__":
     wind_speed_unit="m/s"
 
     print("converted all units",flush=True)
-
-if __name__ == "__main__":
 
     ######################################
     # interpolate data to lon-lat grid   #
@@ -361,8 +360,6 @@ if __name__ == "__main__":
      
     outvars_interpolated['hurs'] = np.where((outvars_interpolated['hurs'] < 100),outvars_interpolated['hurs'],100)
 
-if __name__ == "__main__":
-
     print("writting outdata to",filename_out,flush="True")
 
     dsout = xr.Dataset({
@@ -378,4 +375,6 @@ if __name__ == "__main__":
  
     dsout.to_netcdf(filename_out)
 
+if __name__ == "__main__":
+    main()
 

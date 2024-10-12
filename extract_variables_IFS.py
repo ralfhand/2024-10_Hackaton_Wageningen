@@ -440,11 +440,17 @@ def main():
     outlon = np.arange(lon_min,lon_max + res_out_x, res_out_x, dtype=float)
     outlat = np.arange(lat_min,lat_max + res_out_y, res_out_y, dtype=float)
 
-    varlist = ["tas","pr","wind_speed","hurs","timeshift"]
+    varlist = ["tas","pr","wind_speed","hurs"] # ,"timeshift"]
     poolsize = min(len(varlist),maxpoolsize)
 
     manager=Manager()
     outvars=manager.dict()
+
+    print("time shape:", ds_reg.sel(time=slice(dateout_min,dateout_max)).time.shape)
+    print("outlon shape",outlon.shape)
+    print("outlat shape",outlat.shape)
+    for var in varlist:
+        print(var, "shape",localtime_vars_xr[var].shape)
 
     with Pool(poolsize) as p:
 

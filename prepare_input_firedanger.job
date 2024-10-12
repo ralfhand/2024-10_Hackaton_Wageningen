@@ -32,8 +32,8 @@ module load cdo
 export YYYY=$1                             # uncomment if run as SLURM interactive job
 # export YYYY=$SLURM_ARRAY_TASK_ID           # uncomment if run as SLURM array
 
-export model="ICON"
-export exp_id="ngc4008"
+# export model="ICON"
+# export exp_id="ngc4008"
 
 export model="IFS"
 export exp_id="IFS_9-FESOM_5-production-hist"

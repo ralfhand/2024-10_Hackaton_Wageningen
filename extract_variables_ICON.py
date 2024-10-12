@@ -36,10 +36,7 @@ import intake
 import dask
 # from dask.diagnostics import ProgressBar
 from multiprocessing import Pool, Manager, current_process
-# import pandas as pd
-# import functools
 import itertools
-# import cmocean
 import metpy.calc
 from metpy.units import units
 import healpy
@@ -47,9 +44,6 @@ import xarray as xr
 import numpy as np
 from scipy import interpolate
 from datetime import datetime
-# import matplotlib.pyplot as plt
-# import cartopy.crs as ccrs
-# import cartopy.feature as cfeature
 # import logging
 from collections.abc import Iterable
 
@@ -63,7 +57,7 @@ def read_args():
     Read arguments from input
     """
     
-    global YYYY, exp_id, lon_min, lon_max, lat_min, lat_max, interpol_method, res_out_x, res_out_y, outfile, maxpoolsize, time_min, time_max, zoom
+    global YYYY, exp_id, lon_min, lon_max, lat_min, lat_max, interpol_method, res_out_x, res_out_y, outfile, maxpoolsize, dateout_min, dateout_max, zoom
 
     YYYY = int(sys.argv[1])
     exp_id = str(sys.argv[2])
@@ -83,15 +77,15 @@ def read_args():
 
     match YYYY:
        case 2020:
-          time_min = str(YYYY) + "-01-01"
+          dateout_min = str(YYYY) + "-01-02"
        case _:
-          time_min = str(int(YYYY) - 1) + "-12-31"
+          dateout_min = str(int(YYYY) - 1) + "-12-31"
 
     match YYYY:
        case 2049:
-          time_max = str(YYYY) + "-12-31"
+          dateout_max = str(YYYY) + "-12-30"
        case _:
-          time_max = str(int(YYYY) + 1) + "-01-01"
+          dateout_max = str(YYYY) + "-12-31"
 
     print("read the following arguments from input:",flush=True) 
     print("        YYYY = ",YYYY,flush=True)
@@ -101,7 +95,7 @@ def read_args():
     print("     outfile = ", outfile,flush=True)
     print(" maxpoolsize = ", maxpoolsize,flush=True)
 
-    return  YYYY, exp_id, lon_min, lon_max, lat_min, lat_max, interpol_method, res_out_x, res_out_y, outfile, maxpoolsize, time_min, time_max, zoom
+    return  YYYY, exp_id, lon_min, lon_max, lat_min, lat_max, interpol_method, res_out_x, res_out_y, outfile, maxpoolsize, dateout_min, dateout_max, zoom
 
 
 def get_nest(dx):
@@ -134,37 +128,51 @@ def set_localtime(ds,outname,var):
     Corrects the time of var from UTC to local time
     """
     
-    timeshift = 0 * ds.sel(time=slice(str(YYYY - 1) + "-12-31",str(YYYY) + "-12-31"))[var][:,:] + np.round(24/360*ds.lon)
+    timeshift = 0 * ds.sel(time=slice(dateout_min,dateout_max))[var][:,:] + np.round(24/360*ds.lon)
     print("timeshift.shape:",timeshift.shape)
 
     i=0
 
     timeshift_check_list = [-9,-6,-3,0,3,6,9,12] 
-    # timeshift_check_list = range(-9,-3,3)
 
-    data_local=np.empty((len(timeshift_check_list),len(timeshift_check_list),ds.sel(time=slice(str(YYYY-1)+"-12-31",str(YYYY)+"-12-31"))[var].shape[0],ds[var].shape[1]))
-    
+    data_local=np.empty((len(timeshift_check_list),len(timeshift_check_list),ds.sel(time=slice(dateout_min,dateout_max))[var].shape[0],ds[var].shape[1]))
+
     for timeshift_check in timeshift_check_list:
 
         print("calculating localtime for GMT",timeshift_check,"hours.")
  
-        # if timeshift_check < 0:
-        #   data_timsel = ds.sel(time=slice(str(int(YYYY) - 1) + "-12-31-" + str(24 + timeshift_check) + ":00:00",
-        #                                    str(YYYY) + "-12-31-" + str(23 + timeshift_check) + ":59:59"))
-        # elif timeshift_check == 0:
-        #    data_timesel = ds.sel(time=slice(str(YYYY) + "-01-01",str(YYYY) + "-12-31"))
-        # else:
-        #    data_timsel = ds.sel(time=slice(str(YYYY) + "-01-01-" + str(timeshift_check) + ":00:00",
-        #                                    str(int(YYYY) + 1) + "-01-01-" + str(timeshift_check - 1 ) + ":59:59"))
+        match YYYY:
 
-        if timeshift_check < 0:
-            data_timsel = ds.sel(time=slice(str(int(YYYY) - 1) + "-12-30-" + str(24 + timeshift_check) + ":00:00",
-                                            str(YYYY) + "-12-31-" + str(23 + timeshift_check) + ":59:59"))
-        elif timeshift_check == 0:
-            data_timesel = ds.sel(time=slice(str(YYYY - 1) + "-12-31",str(YYYY) + "-12-31"))
-        else:
-            data_timsel = ds.sel(time=slice(str(YYYY - 1) + "-12-31-" + str(timeshift_check) + ":00:00",
-                                            str(int(YYYY) + 1) + "-01-01-" + str(timeshift_check - 1 ) + ":59:59"))
+            case 2020:
+                if timeshift_check < 0:
+                    data_timsel = ds.sel(time=slice(str(YYYY) + "-01-01-" + str(24 + timeshift_check) + ":00:00",
+                                                    str(YYYY) + "-12-31-" + str(23 + timeshift_check) + ":59:59"))
+                elif timeshift_check == 0:
+                    data_timesel = ds.sel(time=slice(str(YYYY) + "-01-02",str(YYYY) + "-12-31"))
+                else:
+                    data_timsel = ds.sel(time=slice(str(YYYY) + "-01-02-" + str(timeshift_check) + ":00:00",
+                                                    str(int(YYYY) + 1) + "-01-01-" + str(timeshift_check - 1 ) + ":59:59"))
+
+            case 2049:
+                if timeshift_check < 0:
+                    data_timsel = ds.sel(time=slice(str(int(YYYY) - 1) + "-12-30-" + str(24 + timeshift_check) + ":00:00",
+                                                    str(YYYY) + "-12-30-" + str(23 + timeshift_check) + ":59:59"))
+                elif timeshift_check == 0:
+                    data_timesel = ds.sel(time=slice(str(YYYY - 1) + "-12-30",str(YYYY) + "-12-31"))
+                else:
+                    data_timsel = ds.sel(time=slice(str(YYYY - 1) + "-12-31-" + str(timeshift_check) + ":00:00",
+                                                    str(int(YYYY)) + "-12-31-" + str(timeshift_check - 1 ) + ":59:59"))
+
+            case _:
+                if timeshift_check < 0:
+                    data_timsel = ds.sel(time=slice(str(int(YYYY) - 1) + "-12-30-" + str(24 + timeshift_check) + ":00:00",
+                                                    str(YYYY) + "-12-31-" + str(23 + timeshift_check) + ":59:59"))
+                elif timeshift_check == 0:
+                    data_timesel = ds.sel(time=slice(str(YYYY - 1) + "-12-31",str(YYYY) + "-12-31"))
+                else:
+                    data_timsel = ds.sel(time=slice(str(YYYY - 1) + "-12-31-" + str(timeshift_check) + ":00:00",
+                                                    str(int(YYYY) + 1) + "-01-01-" + str(timeshift_check - 1 ) + ":59:59"))
+
 
 
         data=data_timsel[var]
@@ -180,14 +188,8 @@ def set_localtime(ds,outname,var):
 
         i=+1
 
-    # print("shape of data.local: ",data_local.shape)
-    # print("data.local: ", data_local)
-
     outname[var] = data_local.sum(axis=0)[0,:,:]
 
-    # print("return value outvar for", var,": ",outname[var])
- 
-    # print("local time set for ",var)    # without mp
     print("local time set for ",var, "computed on ", current_process(),flush=True)    # with mp
     
     if (var == "tas"):
@@ -195,6 +197,8 @@ def set_localtime(ds,outname,var):
         return outname["timeshift"], outname[var]
     else:
         return outname[var]
+
+
 
 # @default_kwargs(interpol_method="linear")
 def interpolate_healpy2lonlat(input_array,output_array,varname,inlon,inlat,outlon,outlat,*args,**kwargs):
@@ -345,7 +349,7 @@ def main():
                 timeshift=(["time", "idx"], localtime_vars["timeshift"]),
                 ),
             coords={
-               "time": ds_reg.sel(time=slice(str(YYYY - 1) + "-12-31",str(YYYY) + "-12-31")).time,
+               "time": ds_reg.sel(time=slice(dateout_min, dateout_max)).time,
                },
             )
 
@@ -396,7 +400,7 @@ def main():
             "timeshift": (("time", "lat", "lon"), outvars["timeshift"], {"units": str(hurs_unit),  "long_name": "timeshift s.r.t. GMT"}),
             },
             coords={
-            "time": ds_reg.sel(time=slice(str(YYYY - 1) + "-12-31",str(YYYY) + "-12-31")).time, 
+            "time": ds_reg.sel(time=slice(dateout_min,dateout_max)).time, 
             "lat": ("lat", outlat, {"units": "degree_north",  "long_name": "latitude"}),
             "lon": ("lon", outlon, {"units": "degree_east",  "long_name": "longitude"}),
             },)

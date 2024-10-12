@@ -18,8 +18,8 @@ set -e
 
 module load python3/unstable
 
-export YYYY=$1
-# export YYYY=$SLURM_ARRAY_TASK_ID
+# export YYYY=$1
+export YYYY=$SLURM_ARRAY_TASK_ID
 
 ####################################################################################################################
 ####################################################################################################################
@@ -66,8 +66,8 @@ echo ""
 cpus_per_task=$( echo "$SLURM_CPUS_ON_NODE / $SLURM_NTASKS_PER_NODE" | bc )
 maxpoolsize=$( echo "$SLURM_NNODES * $SLURM_NTASKS_PER_NODE" | bc )
 
-cpus_per_task=32
-maxpoolsize=4
+# cpus_per_task=32
+# maxpoolsize=4
 
 if [ ! -e ${tmpdir} ]; then mkdir ${tmpdir}; fi 
 if [ ! -e ${dir_out} ]; then mkdir ${dir_out}; fi

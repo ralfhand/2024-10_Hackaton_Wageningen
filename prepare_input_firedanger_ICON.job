@@ -18,8 +18,8 @@ set -e
 
 module load python3/unstable
 
-# export YYYY=$1
-export YYYY=$SLURM_ARRAY_TASK_ID
+export YYYY=$1
+# export YYYY=$SLURM_ARRAY_TASK_ID
 
 ####################################################################################################################
 ####################################################################################################################
@@ -46,7 +46,7 @@ export res_out=0.25          # resolution of the interpolated files in degree
 export username="m300363"    # change to your username
 
 export dir_out="/work/bb1153/${username}/fireweather_data/${regionname}"
-export filename_out="${dir_out}/inputvars_${model}_${exp_id}_${regionname}_${res_out/./}_deg_${YYYY}.nc"   # keep YYYY somewhere in the filename 
+export filename_out="${dir_out}/inputvars_${model}_${exp_id}_${regionname}_${res_out/./}deg_${YYYY}.nc"   # keep YYYY somewhere in the filename 
                                                                                                            # as this script will run multiple times
                                                                                                            # called by one SLURM job per year 
 export tmpdir=/work/bb1153/${username}/tmp
@@ -66,8 +66,8 @@ echo ""
 cpus_per_task=$( echo "$SLURM_CPUS_ON_NODE / $SLURM_NTASKS_PER_NODE" | bc )
 maxpoolsize=$( echo "$SLURM_NNODES * $SLURM_NTASKS_PER_NODE" | bc )
 
-# cpus_per_task=32
-# maxpoolsize=4
+cpus_per_task=32
+maxpoolsize=4
 
 if [ ! -e ${tmpdir} ]; then mkdir ${tmpdir}; fi 
 if [ ! -e ${dir_out} ]; then mkdir ${dir_out}; fi
@@ -117,5 +117,6 @@ echo ""
 echo "############################################################"
 echo "prepare_input_firedanger_ICON.job successfully finished! :-)" 
 echo "############################################################"
+echo ""
 
 exit 0
